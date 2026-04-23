@@ -6,6 +6,7 @@ import java.util.List;
 
 public class GamePanel extends JPanel implements Runnable {
     SoundPLayer soundPlayer = new SoundPLayer();
+    private DialogueManager dialogueManager = new DialogueManager();
     // These objects are shared across the whole gameplay screen.
     private CardLayout cardLayout; 
     private JPanel mainPanel; 
@@ -36,7 +37,6 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void spawnPlayer() {
-        // Place the player at the spawn tile from the current map.
         Point spawnPoint = tileManager.getPlayerSpawnLocation();
         player.setPosition(spawnPoint.x, spawnPoint.y - 48);
     }
@@ -64,9 +64,17 @@ public class GamePanel extends JPanel implements Runnable {
 
     public void startGameThread() {
         if (gameThread == null || !gameThread.isAlive()) {
-            // Start the game loop only once.
             gameThread = new Thread(this);
             gameThread.start();
+
+            // Trigger the dialogue here so it starts when the level is actually shown
+            dialogueManager.startDialogue(new String[]{
+                "Welcome to Dungeon Venture...",
+                "Click W or D to move, and click SPACE to Jump.",
+                "When interacting with objects, click E to interact.",
+                "Your goal is to find the exit in each level.",
+                "Clear them all to reveal the exit."
+            });
         }
     }
 
@@ -85,22 +93,26 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void update() {
-        // Update the player first, then enemies, then level interaction.
-        player.update(collisionChecker, tileManager, enemies); 
-
-        playerDead();
-
-        // Remove defeated enemies so portals can unlock once the room is cleared.
-        enemies.removeIf(e -> e.isDead());
-
-        for (Enemy e : enemies) {
-            e.update(1.0f/60.0f, player, collisionChecker, tileManager);
-        }
-
-        if (player.isInteractPressed()) {
-            checkPortalContact();
-        }
+    // Check if dialogue is running
+    if (dialogueManager.isActive()) {
+        dialogueManager.update(player.isInteractPressed());
+        player.resetInputs(); // Clear key state so it doesn't trigger other things
+        return; // STOP physics and movement here!
     }
+
+    // --- NORMAL GAME LOGIC BELOW ---
+    player.update(collisionChecker, tileManager, enemies); 
+    playerDead();
+    enemies.removeIf(e -> e.isDead());
+
+    for (Enemy e : enemies) {
+        e.update(1.0f/60.0f, player, collisionChecker, tileManager);
+    }
+
+    if (player.isInteractPressed()) {
+        checkPortalContact();
+    }
+}
 
     public void playerDead(){ 
         // Switch to the game over screen when HP reaches zero.
@@ -174,14 +186,16 @@ public class GamePanel extends JPanel implements Runnable {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        // Draw the level first, then enemies, then the player on top.
-        if (currentBackground != null) g.drawImage(currentBackground, 0, 0, 1280, 736, null);
+        Graphics2D g2 = (Graphics2D) g; // Cast for better control
+
+        if (currentBackground != null) g2.drawImage(currentBackground, 0, 0, 1280, 736, null);
         
-        tileManager.draw(g, enemies.isEmpty());
+        tileManager.draw(g2, enemies.isEmpty());
         
-        for (Enemy e : enemies) {
-            e.draw(g);
-        }
-        player.draw(g);
+        for (Enemy e : enemies) { e.draw(g2); }
+        player.draw(g2);
+
+        // Render dialogue on top of everything
+        dialogueManager.draw(g2);
     }
 }
