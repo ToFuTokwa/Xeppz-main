@@ -1,0 +1,12 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Run MainFile",
+            "request": "launch",
+            "mainClass": "MainFile",
+            "vmArgs": "--module-path \"javafx-sdk-17.0.19\\lib\" --add-modules javafx.controls,javafx.media,javafx.swing --enable-native-access=javafx.graphics,javafx.media"
+        }
+    ]
+}
