@@ -23,23 +23,19 @@ public class PreGameIntroPanel extends JPanel implements StartSequence {
     
     private JFXPanel fxPanel; 
     private MediaPlayer mediaPlayer;
-    private volatile boolean introRunning;
+    private volatile boolean introRunning = false;
 
     public PreGameIntroPanel(CardLayout cardLayout, JPanel mainPanel, GamePanel gamePanel) {
         this.cardLayout = cardLayout;
         this.mainPanel = mainPanel;
         this.gamePanel = gamePanel;
 
-        // Set the size of the Swing Panel
         this.setPreferredSize(new Dimension(SCREEN_WIDTH, SCREEN_HEIGHT));
         this.setBackground(Color.BLACK);
         this.setLayout(new BorderLayout());
 
-        // Initialize the JavaFX-to-Swing bridge
         fxPanel = new JFXPanel();
-        // Crucial: Set the size of the fxPanel explicitly so it doesn't default to 0x0
         fxPanel.setPreferredSize(new Dimension(SCREEN_WIDTH, SCREEN_HEIGHT));
-        
         this.add(fxPanel, BorderLayout.CENTER);
 
         ensureFxStarted();
@@ -53,21 +49,21 @@ public class PreGameIntroPanel extends JPanel implements StartSequence {
 
     @Override
     public void playIntro() {
-        gamePanel.resetGame();
+        if (introRunning) return; // Prevent double-triggering
+        
         introRunning = true;
-        soundPlayer.stop("UISound"); // Stop menu music
+        gamePanel.resetGame();
+        soundPlayer.stop("UISound");
 
-        // Show this panel in the CardLayout immediately
+        // Force the card switch immediately
         cardLayout.show(mainPanel, "Intro");
 
-        // Run the video setup on the JavaFX Thread
         Platform.runLater(this::setupVideoAndPlay);
     }
 
     private void setupVideoAndPlay() {
         File videoFile = new File(VIDEO_PATH);
         if (!videoFile.exists()) {
-            System.out.println("Video not found at: " + videoFile.getAbsolutePath());
             SwingUtilities.invokeLater(this::finishIntro);
             return;
         }
@@ -75,9 +71,24 @@ public class PreGameIntroPanel extends JPanel implements StartSequence {
         try {
             Media media = new Media(videoFile.toURI().toString());
             mediaPlayer = new MediaPlayer(media);
-            MediaView mediaView = new MediaView(mediaPlayer);
+            mediaPlayer.setCycleCount(1); 
 
-            // Fit the video to your game dimensions
+            // 1. Existing trigger (Natural end)
+            mediaPlayer.setOnEndOfMedia(() -> {
+                System.out.println("EndOfMedia triggered");
+                SwingUtilities.invokeLater(this::finishIntro);
+            });
+
+            // 2. NEW SAFETY TRIGGER: Watch for any status change
+            mediaPlayer.statusProperty().addListener((obs, oldStatus, newStatus) -> {
+                // If the video stops or finishes, move to the game
+                if (newStatus == MediaPlayer.Status.STOPPED || newStatus == MediaPlayer.Status.HALTED) {
+                    System.out.println("Status changed to: " + newStatus);
+                    SwingUtilities.invokeLater(this::finishIntro);
+                }
+            });
+
+            MediaView mediaView = new MediaView(mediaPlayer);
             mediaView.setFitWidth(SCREEN_WIDTH);
             mediaView.setFitHeight(SCREEN_HEIGHT);
             mediaView.setPreserveRatio(true);
@@ -86,19 +97,14 @@ public class PreGameIntroPanel extends JPanel implements StartSequence {
             root.setStyle("-fx-background-color: black;");
             Scene scene = new Scene(root, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-            // Re-attach skip controls to the embedded scene
+            // This part is working for you already
             scene.setOnKeyPressed(event -> {
                 if (event.getCode() == KeyCode.SPACE || event.getCode() == KeyCode.ENTER) {
                     SwingUtilities.invokeLater(this::finishIntro);
                 }
             });
 
-            // Set the scene to the bridge panel
             fxPanel.setScene(scene);
-
-            mediaPlayer.setOnEndOfMedia(() -> SwingUtilities.invokeLater(this::finishIntro));
-            
-            // Start the video
             mediaPlayer.play();
             
         } catch (Exception e) {
@@ -108,17 +114,32 @@ public class PreGameIntroPanel extends JPanel implements StartSequence {
     }
 
     private synchronized void finishIntro() {
+        // Prevent this from running multiple times if EndOfMedia and a key press happen at once
         if (!introRunning) return;
         introRunning = false;
 
-        if (mediaPlayer != null) {
-            mediaPlayer.stop();
-            mediaPlayer.dispose(); // Free up memory
-        }
+        // 1. Cleanup JavaFX on the JavaFX Thread
+        Platform.runLater(() -> {
+            if (mediaPlayer != null) {
+                mediaPlayer.stop();
+                mediaPlayer.dispose(); 
+                mediaPlayer = null;
+            }
+        });
 
-        soundPlayer.loop("BgSound"); // Start game music
-        cardLayout.show(mainPanel, "Game");
-        gamePanel.requestFocusInWindow();
-        gamePanel.startGameThread(); // Start game loop
+        // 2. Update Swing UI on the Swing Thread
+        SwingUtilities.invokeLater(() -> {
+            soundPlayer.loop("BgSound"); 
+            
+            // Ensure "Game" matches the name used in MainFile.java
+            cardLayout.show(mainPanel, "Game"); 
+            
+            gamePanel.requestFocusInWindow();
+            gamePanel.startGameThread(); // Begins the game loop in GamePanel
+            
+            // Force UI refresh
+            mainPanel.revalidate();
+            mainPanel.repaint();
+        });
     }
 }
