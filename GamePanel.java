@@ -70,8 +70,8 @@ public class GamePanel extends JPanel implements Runnable {
             // Trigger the dialogue here so it starts when the level is actually shown
             dialogueManager.startDialogue(new String[]{
                 "Welcome to Dungeon Venture...",
-                "Click W or D to move, and click SPACE to Jump.",
-                "When interacting with objects, click E to interact.",
+                "Click A or D to move, and click SPACE to Jump.",
+                "When interacting with Object like Portals, click E to interact.",
                 "Your goal is to find the exit in each level.",
                 "Clear them all to reveal the exit."
             });
