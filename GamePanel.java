@@ -1,4 +1,6 @@
 import java.awt.*;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import javax.swing.*;
 import java.io.File;
 import java.util.ArrayList;
@@ -7,7 +9,10 @@ import java.util.List;
 public class GamePanel extends JPanel implements Runnable {
     SoundPLayer soundPlayer = new SoundPLayer();
     private DialogueManager dialogueManager = new DialogueManager();
-    // These objects are shared across the whole gameplay screen.
+    
+    // Pass 'this' into the PauseMenu
+    private PauseMenu pauseMenu;
+    
     private CardLayout cardLayout; 
     private JPanel mainPanel; 
     private Player player = new Player();
@@ -20,13 +25,23 @@ public class GamePanel extends JPanel implements Runnable {
     private int HPMax = player.MAX_HP;
 
     public GamePanel(CardLayout cardLayout, JPanel mainPanel) {
-        // Prepare the first level and hook player input into this panel.
-        soundPlayer.stop("GameMusic");
-        soundPlayer.loop("MenuMusic");
         this.cardLayout = cardLayout; 
         this.mainPanel = mainPanel; 
+        this.pauseMenu = new PauseMenu(this); // Initialize with reference to this panel
+
         this.setPreferredSize(new Dimension(1280, 736));
         this.setFocusable(true);
+        
+        // ADDED: Special KeyListener for the Pause Menu logic
+        this.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (pauseMenu.isActive()) {
+                    pauseMenu.handleKeyPress(e);
+                }
+            }
+        });
+
         this.addKeyListener(player);
         this.addMouseListener(player);
         
@@ -42,7 +57,6 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void spawnEnemies() {
-        // Read the map and create an enemy wherever tile 8 appears.
         enemies.clear();
         int[][] grid = tileManager.getTileMap().getMap();
         for (int r = 0; r < grid.length; r++) {
@@ -55,7 +69,6 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void updateLevelVisuals() {
-        // Load the background image for the current level.
         String bgPath = levelManager.getCurrentBackgroundPath();
         if (new File(bgPath).exists()) {
             this.currentBackground = new ImageIcon(bgPath).getImage();
@@ -66,12 +79,15 @@ public class GamePanel extends JPanel implements Runnable {
         if (gameThread == null || !gameThread.isAlive()) {
             gameThread = new Thread(this);
             gameThread.start();
+            soundPlayer.stop("MenuMusic");
+            soundPlayer.loop("GameMusic");
 
-            // Trigger the dialogue here so it starts when the level is actually shown
             dialogueManager.startDialogue(new String[]{
                 "Welcome to Dungeon Venture...",
                 "Click A or D to move, and click SPACE to Jump.",
                 "When interacting with Object like Portals, click E to interact.",
+                "If you want to pause the game, click ESC to open the Pause Menu.",
+                "Now let's get started!",
                 "Your goal is to find the exit in each level.",
                 "Clear them all to reveal the exit."
             });
@@ -82,10 +98,25 @@ public class GamePanel extends JPanel implements Runnable {
         gameThread = null;
     }
 
+    public void returnToMainMenu() {
+    // 1. Stop the game loop thread
+    stopGameThread();
+    
+    // 2. Switch back to the "Home" card defined in MainFile
+    cardLayout.show(mainPanel, "Home");
+    
+    // 3. Reset Audio: Stop game music and loop the UI/Menu music
+    soundPlayer.stop("GameMusic");
+    soundPlayer.loop("UISound"); 
+
+    // 4. CRITICAL: Request focus for the Home screen so it accepts input immediately
+    // Since HomeUI was the first component added to mainPanel, it's at index 0
+    mainPanel.getComponent(0).requestFocusInWindow();
+}
+
     @Override
     public void run() {
         while (gameThread != null) {
-            // Keep updating and redrawing while the game is running.
             update();
             repaint();
             try { Thread.sleep(16); } catch (InterruptedException e) { e.printStackTrace(); }
@@ -93,54 +124,57 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void update() {
-    // Check if dialogue is running
-    if (dialogueManager.isActive()) {
-        dialogueManager.update(player.isInteractPressed());
-        player.resetInputs(); // Clear key state so it doesn't trigger other things
-        return; // STOP physics and movement here!
-    }
+        // Handle the Toggle logic (Fixed the null parameter crash)
+        pauseMenu.update(player.isPausePressed());
 
-    // --- NORMAL GAME LOGIC BELOW ---
-    player.update(collisionChecker, tileManager, enemies); 
-    playerDead();
-    enemies.removeIf(e -> e.isDead());
+        if (pauseMenu.isActive()) {
+            player.resetInputs(); 
+            return; // Freezes game world while paused
+        }
 
-    for (Enemy e : enemies) {
-        e.update(1.0f/60.0f, player, collisionChecker, tileManager);
-    }
+        if (dialogueManager.isActive()) {
+            dialogueManager.update(player.isInteractPressed());
+            player.resetInputs(); 
+            return; 
+        }
 
-    if (player.isInteractPressed()) {
-        checkPortalContact();
+        // --- NORMAL GAME LOGIC ---
+        player.update(collisionChecker, tileManager, enemies); 
+        playerDead();
+        enemies.removeIf(e -> e.isDead());
+
+        for (Enemy e : enemies) {
+            e.update(1.0f/60.0f, player, collisionChecker, tileManager);
+        }
+
+        if (player.isInteractPressed()) {
+            checkPortalContact();
+        }
     }
-}
 
     public void playerDead(){ 
-        // Switch to the game over screen when HP reaches zero.
         if (player.isDead()) {
             stopGameThread();
             cardLayout.show(mainPanel, "GameOver");
             mainPanel.getComponent(3).requestFocusInWindow();
-            soundPlayer.stop("BgSound");
+            soundPlayer.stop("GameMusic");
             soundPlayer.loop("UISound");
         }
     }
 
     public void resetGame(){ 
-        // Reset everything so the next run starts from level 1 again.
-        stopGameThread();
         player.resetStatus(); 
         levelManager.setLevel(0); 
         tileManager.setTileMap(levelManager.getCurrentLevel());
         spawnEnemies();
         updateLevelVisuals();
         spawnPlayer(); 
+        // Restart thread if it was stopped
+        if(gameThread == null) startGameThread();
     }
 
     private void checkPortalContact() {
-        // The portal only works after all enemies are gone.
-        if (!enemies.isEmpty()) {
-            return;
-        }
+        if (!enemies.isEmpty()) return;
 
         Rectangle hitbox = player.getHitbox();
         int row = hitbox.y / 32;
@@ -160,16 +194,14 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     private void advanceToNextLevel() {
-        // Clear any held input before moving to the next stage.
         player.resetInputs();
-
         int healAmount = (int) (HPMax * 0.10); 
         player.heal(healAmount);
 
         int currentLevel = levelManager.getCurrentLevelIndex();
 
         if (currentLevel == 2) {
-            soundPlayer.stop("BgSound");
+            soundPlayer.stop("GameMusic");
             soundPlayer.loop("UISound");
             cardLayout.show(mainPanel, "Ending");
             mainPanel.getComponent(4).requestFocusInWindow();
@@ -186,16 +218,16 @@ public class GamePanel extends JPanel implements Runnable {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        Graphics2D g2 = (Graphics2D) g; // Cast for better control
+        Graphics2D g2 = (Graphics2D) g;
 
         if (currentBackground != null) g2.drawImage(currentBackground, 0, 0, 1280, 736, null);
-        
         tileManager.draw(g2, enemies.isEmpty());
-        
         for (Enemy e : enemies) { e.draw(g2); }
         player.draw(g2);
 
-        // Render dialogue on top of everything
         dialogueManager.draw(g2);
+
+        // ALWAYS draw the pause menu last so it stays on top
+        pauseMenu.draw(g2);
     }
 }

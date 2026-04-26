@@ -19,7 +19,7 @@ public class Player implements KeyListener, MouseListener {
     private long invulnerabilityStartTime = 0;
     private static final long INVULNERABILITY_DURATION = 1000; // 1 second
     private static final long INVULNERABILITY_FLASH_INTERVAL = 100; // Flash every 100ms
-    private static final int attack_damage = 70; //70
+    private static final int attack_damage = 1000; //70
     
     // These offsets shape the hitbox so it fits the character better than the full sprite does.
     private static final int HITBOX_X_OFFSET = 20;  // (64-24)/2 = 20px from left
@@ -70,6 +70,7 @@ public class Player implements KeyListener, MouseListener {
     private boolean isOnGround = false;
     private boolean isAttacking = false;
     private boolean debugMode = false; // Set to true to visualize hitboxes
+    private boolean isPausePressed; // Track pause state for input handling
     // Input states
     private boolean isLeftPressed, isRightPressed, isJumpPressed, isInteractPressed;
 
@@ -143,6 +144,10 @@ public class Player implements KeyListener, MouseListener {
             // FIX: Use fillRect with the actual hitbox dimensions
             g.fillRect(attackHitbox.x, attackHitbox.y, attackHitbox.width, attackHitbox.height);
         }
+    }
+
+    public boolean isPausePressed() {
+        return isPausePressed;
     }
 
     public void walkSound() {
@@ -482,9 +487,8 @@ public class Player implements KeyListener, MouseListener {
     
     // INPUT HANDLING
     public void resetInputs() {
-        // Clear key states so movement does not get stuck between screens.
-        isLeftPressed = isRightPressed = isJumpPressed = isInteractPressed = false;
-    }
+    isLeftPressed = isRightPressed = isJumpPressed = isInteractPressed = isPausePressed = false;
+}
     
     // KeyListener
     @Override public void keyPressed(KeyEvent e) {
@@ -494,6 +498,7 @@ public class Player implements KeyListener, MouseListener {
             case KeyEvent.VK_D -> isRightPressed = true;
             case KeyEvent.VK_SPACE -> isJumpPressed = true;
             case KeyEvent.VK_E -> isInteractPressed = true;
+            case KeyEvent.VK_ESCAPE -> isPausePressed = true;
         }
     }
     
@@ -504,6 +509,7 @@ public class Player implements KeyListener, MouseListener {
             case KeyEvent.VK_D -> isRightPressed = false;
             case KeyEvent.VK_SPACE -> isJumpPressed = false;
             case KeyEvent.VK_E -> isInteractPressed = false;
+            case KeyEvent.VK_ESCAPE -> isPausePressed = false;
         }
     }
     

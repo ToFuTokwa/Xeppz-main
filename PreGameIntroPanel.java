@@ -106,6 +106,10 @@ public class PreGameIntroPanel extends JPanel implements StartSequence {
 
             fxPanel.setScene(scene);
             mediaPlayer.play();
+
+            fxPanel.setFocusable(true);
+            fxPanel.requestFocusInWindow(); 
+            Platform.runLater(() -> fxPanel.getScene().getRoot().requestFocus());
             
         } catch (Exception e) {
             e.printStackTrace();
