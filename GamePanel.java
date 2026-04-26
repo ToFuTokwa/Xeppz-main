@@ -9,6 +9,10 @@ import java.util.List;
 public class GamePanel extends JPanel implements Runnable {
     SoundPLayer soundPlayer = new SoundPLayer();
     private DialogueManager dialogueManager = new DialogueManager();
+    boolean dropDebug = false;
+    
+    // Drop system variables
+    private List<Drop> activeDrops = new ArrayList<>();
     
     // Pass 'this' into the PauseMenu
     private PauseMenu pauseMenu;
@@ -115,42 +119,97 @@ public class GamePanel extends JPanel implements Runnable {
 }
 
     @Override
-    public void run() {
-        while (gameThread != null) {
-            update();
+public void run() {
+    double drawInterval = 1000000000.0 / 60.0; // Use .0 to ensure double precision
+    double delta = 0;
+    long lastTime = System.nanoTime();
+    long currentTime;
+    
+    // For debugging speed
+    long timer = 0;
+    int drawCount = 0;
+
+    while (gameThread != null) {
+        currentTime = System.nanoTime();
+        delta += (currentTime - lastTime) / drawInterval;
+        timer += (currentTime - lastTime);
+        lastTime = currentTime;
+
+        if (delta >= 1) {
+            update();   
             repaint();
-            try { Thread.sleep(16); } catch (InterruptedException e) { e.printStackTrace(); }
+            delta--;
+            drawCount++;
+        }
+
+        // Console check: This should print "FPS: 60" every second
+        if (timer >= 1000000000) {
+            System.out.println("FPS: " + drawCount);
+            drawCount = 0;
+            timer = 0;
         }
     }
+}
 
     private void update() {
-        // Handle the Toggle logic (Fixed the null parameter crash)
-        pauseMenu.update(player.isPausePressed());
+    // 1. Handle Pause first
+    pauseMenu.update(player.isPausePressed());
+    if (pauseMenu.isActive()) {
+        player.resetInputs();
+        return;
+    }
 
-        if (pauseMenu.isActive()) {
-            player.resetInputs(); 
-            return; // Freezes game world while paused
-        }
+    // 2. Handle Dialogue
+    if (dialogueManager.isActive()) {
+        dialogueManager.update(player.isInteractPressed());
+        player.resetInputs();
+        return;
+    }
 
-        if (dialogueManager.isActive()) {
-            dialogueManager.update(player.isInteractPressed());
-            player.resetInputs(); 
-            return; 
-        }
+    // 3. Update Entities ONCE
+    player.update(collisionChecker, tileManager, enemies);
+    for (Enemy e : enemies) {
+        e.update(1.0f/60.0f, player, collisionChecker, tileManager);
+    }
 
-        // --- NORMAL GAME LOGIC ---
-        player.update(collisionChecker, tileManager, enemies); 
-        playerDead();
-        enemies.removeIf(e -> e.isDead());
-
-        for (Enemy e : enemies) {
-            e.update(1.0f/60.0f, player, collisionChecker, tileManager);
-        }
-
-        if (player.isInteractPressed()) {
-            checkPortalContact();
+    // 4. Check for Deaths and Spawn Drops
+    for (int i = 0; i < enemies.size(); i++) {
+        Enemy e = enemies.get(i);
+        if (e.isDead()) {
+            if (dropDebug) {
+                activeDrops.add(new Drop((int)e.getX(), (int)e.getY(), Drop.Type.DMG_BOOST));
+            } else {
+                double roll = Math.random();
+                if (roll < 0.70) {
+                    double dropType = Math.random();
+                    if (dropType < 0.50) activeDrops.add(new Drop((int)e.getX(), (int)e.getY(), Drop.Type.HEAL));
+                    else activeDrops.add(new Drop((int)e.getX(), (int)e.getY(), Drop.Type.DMG_BOOST));
+                }
+            }
+            enemies.remove(i);
+            i--;
         }
     }
+
+    // 5. Handle Drop Pickups
+    Rectangle pBox = player.getHitbox();
+    for (int i = 0; i < activeDrops.size(); i++) {
+        Drop d = activeDrops.get(i);
+        if (pBox.intersects(d.getHitbox())) {
+            if (d.type == Drop.Type.HEAL) player.heal(100);
+            else player.activateDamageBoost();
+            activeDrops.remove(i);
+            i--;
+        }
+    }
+
+    player.updateBoostTimer();
+    playerDead();
+
+    if (player.isInteractPressed()) {
+        checkPortalContact();
+    }
+}
 
     public void playerDead(){ 
         if (player.isDead()) {
@@ -197,6 +256,7 @@ public class GamePanel extends JPanel implements Runnable {
         player.resetInputs();
         int healAmount = (int) (HPMax * 0.10); 
         player.heal(healAmount);
+        activeDrops.clear();
 
         int currentLevel = levelManager.getCurrentLevelIndex();
 
@@ -220,14 +280,23 @@ public class GamePanel extends JPanel implements Runnable {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
 
-        if (currentBackground != null) g2.drawImage(currentBackground, 0, 0, 1280, 736, null);
+        // 1. DRAW BACKGROUND FIRST (So it's at the back)
+        if (currentBackground != null) {
+            g2.drawImage(currentBackground, 0, 0, 1280, 736, null);
+        }
+
+        // 2. DRAW WORLD OBJECTS
         tileManager.draw(g2, enemies.isEmpty());
+        
+        for (Drop d : activeDrops) {
+            d.draw(g2); // Now these appear ON TOP of the background
+        }
+
         for (Enemy e : enemies) { e.draw(g2); }
         player.draw(g2);
 
+        // 3. DRAW UI (Dialogue/Pause)
         dialogueManager.draw(g2);
-
-        // ALWAYS draw the pause menu last so it stays on top
         pauseMenu.draw(g2);
     }
 }

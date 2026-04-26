@@ -74,6 +74,11 @@ public class Player implements KeyListener, MouseListener {
     // Input states
     private boolean isLeftPressed, isRightPressed, isJumpPressed, isInteractPressed;
 
+    // Drop system variables
+    private int currentAttackDamage = 1000; // Removed 'static final' to allow boosting
+    private long boostEndTime = 0;
+    private boolean isDamageBoosted = false;
+
     // CONSTRUCTOR
     public Player() {
         loadAnimations();
@@ -146,9 +151,32 @@ public class Player implements KeyListener, MouseListener {
         }
     }
 
-    public boolean isPausePressed() {
-        return isPausePressed;
+    // Change this to ensure it only activates ONCE per pickup
+public void activateDamageBoost() {
+    if (!isDamageBoosted) {
+        this.currentAttackDamage = attack_damage * 2; 
+        isDamageBoosted = true;
+        // DO NOT multiply movement speed here unless you want the player to fly!
     }
+    boostEndTime = System.currentTimeMillis() + 30000;
+}
+
+    public void updateBoostTimer() {
+        if (isDamageBoosted && System.currentTimeMillis() > boostEndTime) {
+            currentAttackDamage /= 2; // Reset to original
+            isDamageBoosted = false;
+            System.out.println("Damage boost expired.");
+        }
+    }
+
+    // Ensure your getAttackDamage() method returns currentAttackDamage
+    public int getAttackDamage() {
+        return currentAttackDamage;
+    }
+
+        public boolean isPausePressed() {
+            return isPausePressed;
+        }
 
     public void walkSound() {
         // Play walking sound only while movement keys are held.
@@ -193,6 +221,13 @@ public class Player implements KeyListener, MouseListener {
         g.setColor(Color.WHITE);
         g.setFont(new Font("Arial", Font.BOLD, 16));
         g.drawString(currentHP + "/" + MAX_HP, BAR_X + 5, BAR_Y + 15);
+
+        if (isDamageBoosted) {
+            long secondsLeft = (boostEndTime - System.currentTimeMillis()) / 1000;
+            g.setColor(Color.ORANGE);
+            g.setFont(new Font("Arial", Font.BOLD, 14));
+            g.drawString("DMG BOOST: " + secondsLeft + "s", 10, 50);
+        }
     }
     
     // Complete damage system
