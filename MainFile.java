@@ -25,6 +25,7 @@ public class MainFile {
         // Set up the window and all screens the player can move between.
         SoundPLayer soundPlayer = new SoundPLayer();
         soundPlayer.init(); // Load sounds at the start of the game
+        soundPlayer.setGlobalVolume(50); // Sets starting volume to match your PauseMenu default
         soundPlayer.loop("UISound"); // Start background music immediately
         JFrame window = new JFrame();
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);

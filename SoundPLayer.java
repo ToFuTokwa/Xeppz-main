@@ -19,6 +19,28 @@ public class SoundPLayer {
         loadSound("UISound", "Assets/Sound/UISound.wav");
     }
 
+    // Add this to SoundPLayer.java
+    public void setGlobalVolume(int volume) {
+        // Clamp volume between 0 and 100
+        if (volume < 0) volume = 0;
+        if (volume > 100) volume = 100;
+
+        float decibels;
+        if (volume == 0) {
+            decibels = -80.0f; // Effectively mute
+        } else {
+            // Convert linear 0-100 to logarithmic decibels
+            decibels = (float) (Math.log10(volume / 100.0) * 20.0);
+        }
+
+        for (Clip clip : soundMap.values()) {
+            if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+                FloatControl gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+                gainControl.setValue(decibels);
+            }
+        }
+    }
+
     public void loadSound(String name, String path) {
         // Open the sound file and keep it ready to play later.
         try {

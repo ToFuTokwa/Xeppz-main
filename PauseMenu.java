@@ -74,11 +74,11 @@ public class PauseMenu {
                 break;
             case KeyEvent.VK_UP:
                 if (volume < 100) volume += 5;
-                // gp.soundPlayer.setVolume(volume); // Uncomment if your SoundPlayer supports this
+                gp.soundPlayer.setGlobalVolume(volume);
                 break;
             case KeyEvent.VK_DOWN:
                 if (volume > 0) volume -= 5;
-                // gp.soundPlayer.setVolume(volume);
+                gp.soundPlayer.setGlobalVolume(volume);
                 break;
         }
     }
