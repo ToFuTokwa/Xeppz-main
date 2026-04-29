@@ -10,7 +10,7 @@ public class GamePanel extends JPanel implements Runnable {
     SoundPLayer soundPlayer = new SoundPLayer();
     private DialogueManager dialogueManager = new DialogueManager();
     boolean dropDebug = false;
-    
+
     // Drop system variables
     private List<Drop> activeDrops = new ArrayList<>();
     
@@ -31,8 +31,11 @@ public class GamePanel extends JPanel implements Runnable {
     public GamePanel(CardLayout cardLayout, JPanel mainPanel) {
         this.cardLayout = cardLayout; 
         this.mainPanel = mainPanel; 
+        
         this.pauseMenu = new PauseMenu(this); // Initialize with reference to this panel
 
+        Drop.init(); // Load drop images once at the start
+        
         this.setPreferredSize(new Dimension(1280, 736));
         this.setFocusable(true);
         
@@ -180,7 +183,7 @@ public void run() {
                 activeDrops.add(new Drop((int)e.getX(), (int)e.getY(), Drop.Type.DMG_BOOST));
             } else {
                 double roll = Math.random();
-                if (roll < 0.70) {
+                if (roll < 0.90) { // 90% chance to drop something
                     double dropType = Math.random();
                     if (dropType < 0.50) activeDrops.add(new Drop((int)e.getX(), (int)e.getY(), Drop.Type.HEAL));
                     else activeDrops.add(new Drop((int)e.getX(), (int)e.getY(), Drop.Type.DMG_BOOST));
